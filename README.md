@@ -146,6 +146,6 @@ We provide tools to generate new routes using the customizable scenarios and nov
 
 ![Toolbox](./assets/toolbox.png)
 
-You can find the documentation for these tools [here](toolbox\README.md).
+You can find the documentation for these tools [here](toolbox).
 
 To share and browse community-created scenarios, visit our scenario hub [here](https://github.com/SimonGer/fail2drive_scenario_hub).
