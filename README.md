@@ -28,7 +28,7 @@ Fail2Drive is the first CARLA v2 benchmark designed to test closed-loop generali
 
 ## Leaderboard
 
-<a href="https://github.com/SimonGer/fail2drive_leaderboard"><img src="https://raw.githubusercontent.com/SimonGer/fail2drive_leaderboard/main/rendered/table.png" width="64%"></a> <img src="./assets/bar_plot.png" width="34.55%">
+<a href="https://github.com/SimonGer/fail2drive_leaderboard"><img src="https://raw.githubusercontent.com/SimonGer/fail2drive_leaderboard/main/rendered/table.png" width="64%"></a> <img src="./assets/bar_plot.png" width="35.5%">
 
 ## Contents
 
