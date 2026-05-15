@@ -1320,6 +1320,10 @@ class Window(QWidget):
                 value = elem.get("value")
                 if value is not None:
                     initial_values[attr_name] = value
+            elif attr_type == "objects":
+                attrs = dict(elem.attrib)
+                if attrs:
+                    initial_values[attr_name] = attrs
         return initial_values
 
     @staticmethod

@@ -221,6 +221,15 @@ class ScenarioAttributeDialog(QDialog):
                 except:
                     updated_attributes.append(None)
 
+            elif attr_type == "objects":
+                widgets_dict = input_widgets
+                result = {}
+                for key, line_edit in widgets_dict.items():
+                    text = line_edit.text().strip()
+                    if text:
+                        result[key] = text
+                updated_attributes.append((attribute, attr_type, result) if result else None)
+
             else:
                 raise NotImplementedError(f"Type {attr_type} is not implemented yet")
 
@@ -408,6 +417,34 @@ class ScenarioAttributeDialog(QDialog):
 
             self.scenario_attributes.append((attribute, attr_type, combo_box))
 
+        elif attr_type == "objects":
+            font = QFont("Arial", self.font_size)
+            initial_dict = self.initial_values.get(attribute) if isinstance(self.initial_values.get(attribute), dict) else {}
+            widgets_dict = {}
+            sorted_keys = sorted((default_value or {}).keys())
+            for idx, key in enumerate(sorted_keys, start=1):
+                default_val = (default_value or {}).get(key)
+                label = QLabel(f"{attribute.upper()} {idx}: ")
+                label.setToolTip(tooltip)
+                label.setFont(font)
+                self.left_layout.addWidget(label)
+
+                line_edit = DefaultValueLineEdit()
+                line_edit.setPlaceholderText("(no pedestrian)")
+                line_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                line_edit.setToolTip(tooltip)
+                # Use setText (not set_auto_default) so _default_text stays None and
+                # _restore_default_if_empty never fires — clearing the field actually empties it.
+                if key in initial_dict:
+                    line_edit.setText(str(initial_dict[key]))
+                elif default_val is not None:
+                    line_edit.setText(str(default_val))
+                line_edit.setFont(font)
+                self.right_layout.addWidget(line_edit)
+                widgets_dict[key] = line_edit
+
+            self.scenario_attributes.append((attribute, attr_type, widgets_dict))
+
         else:
             raise NotImplementedError(f"Type {attr_type} is not implemented yet")
 
@@ -466,6 +503,14 @@ class ScenarioAttributeDialog(QDialog):
                     values[attribute] = [from_text, to_text]
             elif attr_type == "choice":
                 values[attribute] = input_widgets.currentText()
+            elif attr_type == "objects":
+                result = {}
+                for key, line_edit in input_widgets.items():
+                    text = line_edit.text().strip()
+                    if text:
+                        result[key] = text
+                if result:
+                    values[attribute] = result
             elif attr_type == "transform" or "location" in attr_type:
                 if isinstance(input_widgets, dict) and input_widgets.get("value") is not None:
                     values[attribute] = list(input_widgets["value"])

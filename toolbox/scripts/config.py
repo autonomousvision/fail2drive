@@ -230,7 +230,7 @@ SCENARIO_TYPES = {
     ],
     "PedestriansOnRoad": [
         ["distance", "value", 20],
-        ["pedestrians", "value", 3],
+        ["pedestrians", "objects", {"a": "walker.pedestrian.*", "b": "walker.pedestrian.*", "c": "walker.pedestrian.*"}],
         ["walker_duration", "value", 20],
         ["walker_speed", "value", 2],
     ],
