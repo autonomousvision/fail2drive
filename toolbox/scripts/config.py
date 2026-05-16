@@ -215,6 +215,8 @@ SCENARIO_TYPES = {
     ],
     "CustomObstacle": [
         ["distance", "value", 100],
+        ["direction", "choice"],
+        ["speed", "value", 60],
     ],
     "CustomObstacleTwoWays": [
         ["distance", "value", 100],
@@ -584,13 +586,3 @@ PEDESTRIAN_WALKER_SCENARIO_TYPES = {
     "VehicleTurningRoutePedestrian",
 }
 
-
-# Scenarios that should open the shared graphical editor.
-# Presets are shared via the graphical editor preset store.
-GRAPHICAL_EDITOR_SCENARIO_TYPES = {
-    "CustomObstacle",
-    "CustomObstacleTwoWays",
-    "RoadBlocked",
-    "BadParkingObstacle",
-    "PermutedConstructionObstacle",
-}

@@ -1459,8 +1459,14 @@ class Window(QWidget):
                 _apply_attributes_to_initial_values(dialog_attributes)
                 if is_bad_parking:
                     layout_attributes = [x for x in dialog_attributes if x[0] in ("vehicle", "x", "y", "yaw")]
-                elif is_permuted_construction or is_road_blocked:
-                    layout_attributes = []
+                elif is_permuted_construction:
+                    # warning_sign/debris/cones are hidden from the param dialog, so the
+                    # layout dialog is the only source for them.
+                    layout_attributes = [x for x in dialog_attributes if x[0] in ("warning_sign", "debris", "cones")]
+                elif is_road_blocked:
+                    # objects is not in config.SCENARIO_TYPES for RoadBlocked, so the
+                    # layout dialog is the only source for it.
+                    layout_attributes = [x for x in dialog_attributes if x[0] == "objects"]
                 else:
                     layout_attributes = [x for x in dialog_attributes if x[0] in ("baseline_overlay", "overlay_direction", "objects")]
                 # Return to parameter dialog after saving in customizer.
