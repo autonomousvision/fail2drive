@@ -37,6 +37,10 @@ lidar*
 launch.json
 launch2.json
 
+# Local recovery copies of the prop preview images, produced when shrinking.
+toolbox/images/carla_props_0.9.15_png_originals/
+toolbox/images/carla_props_0.9.15_pre_shrink_originals/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

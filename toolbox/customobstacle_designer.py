@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent, QTimer
-from PyQt6.QtGui import QBrush, QColor, QPen, QPainter, QKeySequence, QShortcut, QIntValidator, QPixmap, QCursor
+from PyQt6.QtGui import QBrush, QColor, QPen, QPainter, QKeySequence, QShortcut, QIntValidator, QPixmap, QCursor, QGuiApplication
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -367,9 +367,12 @@ class Designer(QWidget):
         self._suppress_auto_switch = False
         self.prop_preview_dir = MODULE_DIR / "images" / "carla_props_0.9.15"
         self.prop_preview_cache = {}
-        self.preview_combo_viewports = {}
-        self.preview_combo_widgets = {}
-        self.preview_combo_lineedits = {}
+        self._preview_path_cache: dict[str, "Path | None"] = {}
+        self._current_preview_id: str | None = None
+        # watched widget -> (role, combo_box). role is "viewport" (open
+        # dropdown), "combo" (closed combo body), or "lineedit" (editable
+        # combo's text area). Single map, single eventFilter branch.
+        self.preview_targets = {}
 
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect(-5000, -5000, 10000, 10000)
@@ -389,6 +392,7 @@ class Designer(QWidget):
         self.list_widget.itemDoubleClicked.connect(self._on_list_item_double_clicked)
         self.list_widget.setMouseTracking(True)
         self.list_widget.viewport().setMouseTracking(True)
+        self.list_widget.itemEntered.connect(self._on_list_item_entered)
 
         self.object_combo = QComboBox()
         self.object_combo.setEditable(True)
@@ -400,7 +404,13 @@ class Designer(QWidget):
         self._refresh_object_combo_items(sorted(self.static_extents.keys()))
         self.register_prop_preview_combo(self.object_combo)
 
-        self.prop_preview_popup = QLabel(None, Qt.WindowType.ToolTip)
+        # Parent to self so Qt cleans up the popup when the Designer is
+        # destroyed (no need for a hideEvent override). Click-through +
+        # non-activating so the popup never intercepts a mouse click meant
+        # for the dropdown beneath it and never steals a mouse grab.
+        self.prop_preview_popup = QLabel(self, Qt.WindowType.ToolTip)
+        self.prop_preview_popup.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.prop_preview_popup.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.prop_preview_popup.setStyleSheet(
             "QLabel { background: #ffffff; border: 1px solid #9a9a9a; padding: 2px; }"
         )
@@ -683,20 +693,18 @@ class Designer(QWidget):
         self.object_combo.addItems(object_ids)
 
     def register_prop_preview_combo(self, combo_box: QComboBox):
-        view = combo_box.view()
-        viewport = view.viewport()
-        view.setMouseTracking(True)
+        viewport = combo_box.view().viewport()
         viewport.setMouseTracking(True)
         viewport.installEventFilter(self)
-        self.preview_combo_viewports[viewport] = combo_box
+        self.preview_targets[viewport] = ("viewport", combo_box)
         combo_box.setMouseTracking(True)
         combo_box.installEventFilter(self)
-        self.preview_combo_widgets[combo_box] = combo_box
+        self.preview_targets[combo_box] = ("combo", combo_box)
         line_edit = combo_box.lineEdit()
         if line_edit is not None:
             line_edit.setMouseTracking(True)
             line_edit.installEventFilter(self)
-            self.preview_combo_lineedits[line_edit] = combo_box
+            self.preview_targets[line_edit] = ("lineedit", combo_box)
 
     def make_static_prop_selector(self, current_value: str = "") -> QComboBox:
         combo_box = QComboBox(self)
@@ -1635,6 +1643,11 @@ class Designer(QWidget):
             return text.split(":", 1)[1].strip()
         return ""
 
+    def _on_list_item_entered(self, item: QListWidgetItem):
+        object_id = self._extract_object_id_from_list_item(item)
+        if object_id:
+            self._show_prop_preview(object_id, QCursor.pos())
+
     def _available_object_ids(self):
         if self.allowed_object_ids is not None:
             return sorted(self.allowed_object_ids)
@@ -1724,27 +1737,36 @@ class Designer(QWidget):
     def _find_preview_image_path(self, object_id: str):
         if not object_id:
             return None
+        cache = self._preview_path_cache
+        if object_id in cache:
+            return cache[object_id]
         normalized = object_id.strip().lower().replace(" ", "_").replace(".", "_")
         if not normalized:
+            cache[object_id] = None
             return None
-        candidates = [
-            self.prop_preview_dir / f"{normalized}.webp",
-            self.prop_preview_dir / f"{normalized}.png",
-            self.prop_preview_dir / f"{normalized}.jpg",
-            self.prop_preview_dir / f"{normalized}.jpeg",
-        ]
-        for candidate in candidates:
+        result = None
+        for ext in ("webp", "png", "jpg", "jpeg"):
+            candidate = self.prop_preview_dir / f"{normalized}.{ext}"
             if candidate.exists():
-                return candidate
-        matches = list(self.prop_preview_dir.glob(f"{normalized}.*"))
-        if matches:
-            return matches[0]
-        return None
+                result = candidate
+                break
+        if result is None:
+            matches = list(self.prop_preview_dir.glob(f"{normalized}.*"))
+            if matches:
+                result = matches[0]
+        cache[object_id] = result
+        return result
 
     def _show_prop_preview(self, object_id: str, global_pos):
         image_path = self._find_preview_image_path(object_id)
         if image_path is None:
             self._hide_prop_preview()
+            return
+
+        # Move-only fast path: same id as last shown, skip pixmap work.
+        popup = self.prop_preview_popup
+        if object_id == self._current_preview_id and popup.isVisible():
+            self._move_popup(global_pos)
             return
 
         cache_key = str(image_path)
@@ -1755,7 +1777,6 @@ class Designer(QWidget):
                 self._hide_prop_preview()
                 return
             target_w, target_h = self.prop_preview_size
-            # Fill the preview card and crop center for a tighter zoomed-in look.
             fitted = loaded.scaled(
                 target_w,
                 target_h,
@@ -1767,13 +1788,36 @@ class Designer(QWidget):
             pixmap = fitted.copy(x, y, target_w, target_h)
             self.prop_preview_cache[cache_key] = pixmap
 
-        self.prop_preview_popup.setPixmap(pixmap)
-        self.prop_preview_popup.adjustSize()
-        self.prop_preview_popup.move(global_pos.x() + 18, global_pos.y() + 20)
-        self.prop_preview_popup.show()
+        popup.setPixmap(pixmap)
+        popup.adjustSize()
+        self._move_popup(global_pos)
+        if not popup.isVisible():
+            popup.show()
+        self._current_preview_id = object_id
+
+    def _move_popup(self, global_pos):
+        """Position the popup near global_pos, clamped to the current screen."""
+        popup = self.prop_preview_popup
+        x = global_pos.x() + 18
+        y = global_pos.y() + 20
+        screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            w = popup.width() if popup.width() > 0 else self.prop_preview_size[0]
+            h = popup.height() if popup.height() > 0 else self.prop_preview_size[1]
+            # Flip to the left of the cursor if it would overflow the right edge.
+            if x + w > geo.right():
+                x = global_pos.x() - 18 - w
+            # Flip above if it would overflow the bottom edge.
+            if y + h > geo.bottom():
+                y = global_pos.y() - 20 - h
+            x = max(geo.left(), min(x, geo.right() - w))
+            y = max(geo.top(), min(y, geo.bottom() - h))
+        popup.move(x, y)
 
     def _hide_prop_preview(self):
         self.prop_preview_popup.hide()
+        self._current_preview_id = None
 
     def _position_mode_switch(self):
         if not hasattr(self, "mode_switch_box") or self.mode_switch_box is None:
@@ -1813,59 +1857,43 @@ class Designer(QWidget):
             )
 
     def eventFilter(self, watched, event):
-        if watched is self.view.viewport() and event.type() == QEvent.Type.Resize:
+        etype = event.type()
+
+        if watched is self.view.viewport() and etype == QEvent.Type.Resize:
             self._position_mode_switch()
             self._position_legend()
             return super().eventFilter(watched, event)
 
-        if watched in self.preview_combo_viewports:
-            combo_box = self.preview_combo_viewports[watched]
-            if event.type() == QEvent.Type.MouseMove:
-                index = combo_box.view().indexAt(event.pos())
-                if index.isValid():
-                    object_id = str(index.data())
-                    self._show_prop_preview(object_id, watched.mapToGlobal(event.pos()))
+        # All combo-related preview targets in one branch. role distinguishes
+        # the open dropdown's viewport from the closed-combo body / its line
+        # edit; MouseMove is the only show trigger, Leave is the only hide.
+        # No FocusOut/Hide on the combo — those fire when the dropdown opens
+        # and would otherwise race with its mouse grab.
+        if watched in self.preview_targets:
+            role, combo_box = self.preview_targets[watched]
+            if etype == QEvent.Type.MouseMove:
+                if role == "viewport":
+                    index = combo_box.view().indexAt(event.pos())
+                    if index.isValid():
+                        object_id = str(index.data())
+                        if object_id:
+                            self._show_prop_preview(object_id, watched.mapToGlobal(event.pos()))
+                    # Sub-pixel gaps between rows return invalid — leave popup as-is.
                 else:
-                    self._hide_prop_preview()
-            elif event.type() in (QEvent.Type.Leave, QEvent.Type.Hide):
-                self._hide_prop_preview()
-            return super().eventFilter(watched, event)
-
-        if watched in self.preview_combo_widgets:
-            combo_box = self.preview_combo_widgets[watched]
-            if event.type() in (QEvent.Type.Enter, QEvent.Type.MouseMove):
-                object_id = combo_box.currentText().strip()
-                if object_id:
-                    global_pos = QCursor.pos()
-                    self._show_prop_preview(object_id, global_pos)
-                else:
-                    self._hide_prop_preview()
-            elif event.type() in (QEvent.Type.Leave, QEvent.Type.Hide):
-                self._hide_prop_preview()
-            return super().eventFilter(watched, event)
-
-        if watched in self.preview_combo_lineedits:
-            combo_box = self.preview_combo_lineedits[watched]
-            if event.type() in (QEvent.Type.Enter, QEvent.Type.MouseMove):
-                object_id = combo_box.currentText().strip()
-                if object_id:
-                    global_pos = QCursor.pos()
-                    self._show_prop_preview(object_id, global_pos)
-                else:
-                    self._hide_prop_preview()
-            elif event.type() in (QEvent.Type.Leave, QEvent.Type.Hide):
+                    object_id = combo_box.currentText().strip()
+                    if object_id:
+                        self._show_prop_preview(object_id, QCursor.pos())
+            elif etype == QEvent.Type.Leave:
                 self._hide_prop_preview()
             return super().eventFilter(watched, event)
 
         if watched is self.list_widget.viewport():
-            if event.type() == QEvent.Type.MouseMove:
-                item = self.list_widget.itemAt(event.pos())
-                object_id = self._extract_object_id_from_list_item(item)
-                if object_id:
-                    self._show_prop_preview(object_id, watched.mapToGlobal(event.pos()))
-                else:
-                    self._hide_prop_preview()
-            elif event.type() in (QEvent.Type.Leave, QEvent.Type.Hide):
+            # Content updates are driven by QListWidget.itemEntered (see
+            # _on_list_item_entered) — fires reliably on item boundaries.
+            # MouseMove here only follows the cursor.
+            if etype == QEvent.Type.MouseMove and self.prop_preview_popup.isVisible():
+                self._move_popup(watched.mapToGlobal(event.pos()))
+            elif etype == QEvent.Type.Leave:
                 self._hide_prop_preview()
         return super().eventFilter(watched, event)
 
