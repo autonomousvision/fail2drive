@@ -30,6 +30,7 @@ SCENARIO_TYPES = {
             "choice",
         ],  # intially this was of type value, but the class implementation only accepts right or false
         ["blocker_model", "value", "static.prop.vendingmachine"],
+        ["blocker_z", "value", 0],
         ["crossing_angle", "value", 0],
         ["walker", "value", "walker.pedestrian.*"],
     ],
@@ -37,6 +38,8 @@ SCENARIO_TYPES = {
         ["distance", "value", 12],
         ["direction", "choice"],
         ["crossing_angle", "value", 0],
+        ["offset_x", "value", 0],
+        ["walker", "value", "walker.pedestrian.*"],
     ],
     "PedestrianCrossing": [
         ["walker", "value", "walker.pedestrian.*"],
@@ -44,6 +47,7 @@ SCENARIO_TYPES = {
     "VehicleTurningRoute": [],
     "VehicleTurningRoutePedestrian": [
         ["walker", "value", "walker.pedestrian.*"],
+        ["offset_y", "value", 0],
     ],
     "BlockedIntersection": [],
     # Actor flows
@@ -113,10 +117,14 @@ SCENARIO_TYPES = {
     ],
     "ConstructionObstacleTwoWays": [
         ["distance", "value", 100],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
     ],
     "PermutedConstructionObstacleTwoWays": [
         ["distance", "value", 100],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
         ["warning_sign", "value", "static.prop.trafficwarning"],
         ["debris", "value", "static.prop.dirtdebris02"],
@@ -132,6 +140,8 @@ SCENARIO_TYPES = {
     ],
     "AccidentTwoWays": [
         ["distance", "value", 120],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
     ],
     "ParkedObstacle": [
@@ -153,10 +163,14 @@ SCENARIO_TYPES = {
     ],
     "ParkedObstacleTwoWays": [
         ["distance", "value", 120],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
     ],
     "BadParkingObstacleTwoWays": [
         ["distance", "value", 120],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
         ["vehicle", "value", "vehicle.*"],
         ["x", "value", 0],
@@ -177,6 +191,7 @@ SCENARIO_TYPES = {
     ],
     "HazardAtSideLaneTwoWays": [
         ["distance", "value", 100],
+        ["speed", "value", 60],
         ["frequency", "value", 100],
         ["bicycle_drive_distance", "value", 50],
         ["bicycle_speed", "value", 10],
@@ -203,6 +218,8 @@ SCENARIO_TYPES = {
     ],
     "CustomObstacleTwoWays": [
         ["distance", "value", 100],
+        ["direction", "choice"],
+        ["speed", "value", 60],
         ["frequency", "interval", [20, 100]],
     ],
     "RoadBlocked": [
@@ -275,7 +292,7 @@ SCENARIO_TYPES = {
         ["opposite_source_dist", "value"],
         ["opposite_max_actors", "value"],
         ["opposite_spawn_dist", "value"],
-        ["opposite_active", "bool"],
+        ["opposite_active", "value", 1],
         ["junction_source_dist", "value"],
         ["junction_max_actors", "value"],
         ["junction_spawn_dist", "value"],
@@ -349,6 +366,7 @@ PARAM_TOOLTIPS_DEFAULT = {
     "direction": "Side/direction choice used by the scenario logic.",
     "distance": "Distance ahead of trigger point in meters.",
     "blocker_model": "CARLA blueprint id for blocker object/prop.",
+    "blocker_z": "Vertical (z) offset of the blocker prop in meters.",
     "crossing_angle": "Crossing angle in degrees (typically between -90 and 90).",
     "start_actor_flow": "Start location for actor flow spawn lane.",
     "end_actor_flow": "End/sink location for actor flow.",
@@ -368,7 +386,7 @@ PARAM_TOOLTIPS_DEFAULT = {
     "opposite_source_dist": "Opposite-lane source distance for background traffic.",
     "opposite_max_actors": "Maximum opposite-lane background actors.",
     "opposite_spawn_dist": "Opposite-lane spawn distance.",
-    "opposite_active": "Enable or disable opposite-lane background flow.",
+    "opposite_active": "Opposite-lane background flow active flag (0 = disable, 1 = enable).",
     "junction_source_dist": "Junction source distance for background traffic.",
     "junction_max_actors": "Maximum junction background actors.",
     "junction_spawn_dist": "Junction spawn distance.",
